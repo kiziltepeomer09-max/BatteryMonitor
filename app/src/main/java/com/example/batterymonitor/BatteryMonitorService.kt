@@ -63,12 +63,28 @@ class BatteryMonitorService : Service() {
         serviceJob?.cancel()
         serviceJob = coroutineScope.launch {
             while (isActive) {
-                // Değer genelde mikroamper olarak döner, miliampere çeviriyoruz (cihaza göre değişebilir)
-                val currentMicroAmps = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
-                val currentMilliAmps = currentMicroAmps / 1000f 
+                // Önce daha stabil olan Ortalama (Average) akımı okumayı deneriz
+                var currentMicroAmps = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_AVERAGE)
+                
+                // Eğer cihaz o an Average okuyamazsa (0 dönerse), anlık değere geri düşeriz
+                if (currentMicroAmps == 0) {
+                    currentMicroAmps = batteryManager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CURRENT_NOW)
+                }
+                
+                var currentMilliAmps = currentMicroAmps / 1000f 
+                
+                // Xiaomi için şarj yönünü sabitleme
+                val isCharging = batteryManager.isCharging
+                currentMilliAmps = Math.abs(currentMilliAmps)
+                
+                if (!isCharging) {
+                    currentMilliAmps = -currentMilliAmps
+                }
                 
                 BatteryDataRepository.addCurrentValue(currentMilliAmps)
-                delay(1000L) // 1 saniyede bir okuma
+                
+                // Daha stabil bir okuma için süreyi 2 saniyeye çıkarıyoruz (2000L)
+                delay(2000L) 
             }
         }
     }
